@@ -39,7 +39,9 @@ def train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib'):
 
     X = df.drop(columns=[target])
     y = df[target]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
     scaler = StandardScaler()
     X_train_s = scaler.fit_transform(X_train)
     X_test_s = scaler.transform(X_test)
@@ -48,7 +50,7 @@ def train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib'):
     model.fit(X_train_s, y_train)
 
     # Evaluate and save
-    y_proba = model.predict_proba(X_test_s)[:,1]
+    y_proba = model.predict_proba(X_test_s)[:, 1]
     y_pred = model.predict(X_test_s)
     print('ROC AUC', roc_auc_score(y_test, y_proba))
     joblib.dump(model, cache_path)
@@ -61,6 +63,7 @@ def train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib'):
 # -------------------------
 
 st.title("Sprint 4 — Business Application: Heart Disease Explorer")
+st.markdown("**TenYearCHD** = Risiko for at udvikle hjertesygdom inden for 10 år (0 = ingen, 1 = ja)")
 
 # Load data
 with st.spinner('Loading data...'):
@@ -93,7 +96,7 @@ if show_eda:
     cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
     st.markdown('**Correlation Heatmap**')
-    fig, ax = plt.subplots(figsize=(10,8))
+    fig, ax = plt.subplots(figsize=(10, 8))
     sns.heatmap(df[cols].corr(), annot=True, fmt='.2f', cmap='coolwarm', ax=ax)
     st.pyplot(fig)
 
@@ -103,7 +106,9 @@ if show_eda:
     st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown('**Grouped Histograms: TenYearCHD**')
-    group_var = st.selectbox('Variable to group by TenYearCHD', cols, index=min(3, len(cols)-1))
+    group_var = st.selectbox(
+        'Variable to group by TenYearCHD', cols, index=min(3, len(cols) - 1)
+    )
     fig3 = px.histogram(df, x=group_var, color='TenYearCHD', barmode='overlay', nbins=30)
     st.plotly_chart(fig3, use_container_width=True)
 
@@ -111,7 +116,11 @@ if show_eda:
 if show_model:
     st.subheader('Model: Random Forest (predict 10-year CHD)')
 
-    model, scaler, loaded = train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib' if use_saved_model else 'rf_heart_temp.joblib')
+    model, scaler, loaded = train_or_load_model(
+        df,
+        target='TenYearCHD',
+        cache_path='rf_heart.joblib' if use_saved_model else 'rf_heart_temp.joblib'
+    )
     if loaded:
         st.success('Loaded cached model')
     else:
@@ -120,9 +129,11 @@ if show_model:
     # Show metrics on holdout sample
     X = df.drop(columns=['TenYearCHD'])
     y = df['TenYearCHD']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
     X_test_s = scaler.transform(X_test)
-    y_proba = model.predict_proba(X_test_s)[:,1]
+    y_proba = model.predict_proba(X_test_s)[:, 1]
     y_pred = model.predict(X_test_s)
     st.write('ROC AUC (test):', roc_auc_score(y_test, y_proba))
     st.write('Accuracy (test):', accuracy_score(y_test, y_pred))
@@ -150,16 +161,43 @@ if show_model:
         if submitted:
             X_new = pd.DataFrame([input_row])
             X_new_s = scaler.transform(X_new)
-            prob = model.predict_proba(X_new_s)[0,1]
-            st.metric('Predicted 10-year CHD probability', f"{prob:.3f}")
+            prob = model.predict_proba(X_new_s)[0, 1]
 
-            # SHAP explanation
+            # Risiko-kategorisering
+            if prob < 0.2:
+                label = "Lav risiko"
+                note = "Sandsynlighed lav (<20%). Overvåg rutinemæssigt."
+                tone = "success"
+            elif prob < 0.5:
+                label = "Moderat risiko"
+                note = "Moderate risiko (20–50%). Overvej opfølgning og livsstilsintervention."
+                tone = "warning"
+            else:
+                label = "Høj risiko"
+                note = "Høj risiko (>50%). Overvej klinisk vurdering og videre undersøgelser."
+                tone = "error"
+
+            # Vis resultater
+            st.metric('Predicted 10-year CHD probability', f"{prob:.1%}")
+            if tone == "success":
+                st.success(f"{label} — {note}")
+            elif tone == "warning":
+                st.warning(f"{label} — {note}")
+            else:
+                st.error(f"{label} — {note}")
+
+            # SHAP explanation (hvis valgt)
             if SHAP_AVAILABLE and show_shap:
                 explainer = shap.TreeExplainer(model)
                 shap_values = explainer.shap_values(X_new_s)
                 st.write('SHAP explanation (force plot)')
                 try:
-                    shap_html = shap.force_plot(explainer.expected_value[1], shap_values[1], X_new, matplotlib=False)
+                    shap_html = shap.force_plot(
+                        explainer.expected_value[1],
+                        shap_values[1],
+                        X_new,
+                        matplotlib=False
+                    )
                     st.components.v1.html(shap_html.html(), height=400)
                 except Exception:
                     st.write('Could not render SHAP force plot in this environment')
@@ -178,13 +216,19 @@ from sklearn.cluster import KMeans
 km = KMeans(n_clusters=cluster_k, random_state=42)
 labels = km.fit_predict(X_scaled)
 
-fig = px.scatter(x=X_pca[:,0], y=X_pca[:,1], color=labels.astype(str), hover_data=[df.index], title='PCA 2D clustering')
+fig = px.scatter(
+    x=X_pca[:, 0],
+    y=X_pca[:, 1],
+    color=labels.astype(str),
+    hover_data=[df.index],
+    title='PCA 2D clustering'
+)
 st.plotly_chart(fig, use_container_width=True)
 
 # Binned analysis
 st.subheader('Binned analysis example')
 bin_col = st.selectbox('Column to bin', numeric.columns.tolist(), index=0)
-agg_col = st.selectbox('Column to aggregate', numeric.columns.tolist(), index=min(1, len(numeric.columns)-1))
+agg_col = st.selectbox('Column to aggregate', numeric.columns.tolist(), index=min(1, len(numeric.columns) - 1))
 nbins = st.slider('Number of bins', 3, 10, 5)
 
 bins = pd.cut(df[bin_col], bins=nbins)
