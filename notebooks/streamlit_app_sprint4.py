@@ -1,4 +1,4 @@
-# streamlit_app_sprint4.py
+# streamlit_app_sprint4_userfriendly_fixed.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -10,8 +10,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, accuracy_score, classification_report
 from sklearn.decomposition import PCA
-import joblib
-import os
+from sklearn.cluster import KMeans
+import joblib, os
 
 # Optional: SHAP
 try:
@@ -20,19 +20,18 @@ try:
 except Exception:
     SHAP_AVAILABLE = False
 
-st.set_page_config(page_title="Heart Disease Explorer", layout="wide")
+st.set_page_config(page_title="❤️ Heart Disease Explorer", layout="wide")
 
 # -------------------------
 # Helper functions
 # -------------------------
-
+@st.cache_data
 def load_data(path="../data/processed/heart_disease_clean.csv"):
-    df = pd.read_csv(path)
-    return df
+    return pd.read_csv(path)
 
-
-def train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib'):
-    if os.path.exists(cache_path):
+@st.cache_resource
+def train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib', use_cache=True):
+    if use_cache and os.path.exists(cache_path):
         model = joblib.load(cache_path)
         scaler = joblib.load(cache_path + '.scaler')
         return model, scaler, True
@@ -46,87 +45,99 @@ def train_or_load_model(df, target='TenYearCHD', cache_path='rf_heart.joblib'):
     X_train_s = scaler.fit_transform(X_train)
     X_test_s = scaler.transform(X_test)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=1)
+    model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
     model.fit(X_train_s, y_train)
 
-    # Evaluate and save
-    y_proba = model.predict_proba(X_test_s)[:, 1]
-    y_pred = model.predict(X_test_s)
-    print('ROC AUC', roc_auc_score(y_test, y_proba))
     joblib.dump(model, cache_path)
     joblib.dump(scaler, cache_path + '.scaler')
     return model, scaler, False
 
+def intervals_to_str(df):
+    """Konverter alle Interval-objekter i DataFrame til string for Plotly."""
+    df = df.copy()
+    for col in df.columns:
+        if isinstance(df[col].dtype, pd.IntervalDtype):
+            df[col] = df[col].astype(str)
+        else:
+            df[col] = df[col].apply(lambda x: str(x) if isinstance(x, pd.Interval) else x)
+    return df
 
 # -------------------------
-# Main app layout
+# Main app
 # -------------------------
-
-st.title("Sprint 4 — Business Application: Heart Disease Explorer")
-st.markdown("**TenYearCHD** = Risiko for at udvikle hjertesygdom inden for 10 år (0 = ingen, 1 = ja)")
+st.title("❤️ Heart Disease Explorer")
+st.markdown("""
+Denne app giver dig mulighed for at:
+- Udforske datasættet
+- Analysere mønstre i hjertesygdom (EDA)
+- Træne & bruge en **Random Forest-model** til at forudsige risiko
+- Visualisere clustering og PCA
+- Afprøve patient-scenarier med individuelle prædiktioner
+""")
 
 # Load data
-with st.spinner('Loading data...'):
-    df = load_data()
+df = load_data()
 
-# Sidebar controls
-with st.sidebar:
-    st.header('Controls')
-    show_preview = st.checkbox('Show dataset preview', value=True)
-    show_eda = st.checkbox('Show EDA', value=True)
-    show_model = st.checkbox('Show Model & Prediction', value=True)
-    use_saved_model = st.checkbox('Use cached model if available', value=True)
-    if SHAP_AVAILABLE:
-        show_shap = st.checkbox('Show SHAP explanations', value=True)
-    else:
-        st.write('SHAP not installed — explanations disabled')
-    st.markdown('---')
-    st.write('Deployment notes: run `streamlit run streamlit_app_sprint4.py`')
+# Tabs for navigation
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Data", 
+    "🔎 EDA", 
+    "🤖 Model & Prediction", 
+    "🌀 Clustering", 
+    "📈 Binned Analysis"
+])
 
-# Dataset preview
-if show_preview:
-    st.subheader('Dataset preview & summary')
+# -------------------------
+# Tab 1: Dataset
+# -------------------------
+with tab1:
+    st.subheader("Dataset preview & summary")
     st.dataframe(df.sample(min(500, len(df))).reset_index(drop=True))
-    st.write('Shape:', df.shape)
+    col1, col2 = st.columns(2)
+    col1.metric("Rows", df.shape[0])
+    col2.metric("Columns", df.shape[1])
+    st.write("**Statistisk oversigt:**")
     st.write(df.describe())
 
-# EDA
-if show_eda:
-    st.subheader('Exploratory Data Analysis')
+# -------------------------
+# Tab 2: EDA
+# -------------------------
+with tab2:
+    st.subheader("Exploratory Data Analysis")
     cols = df.select_dtypes(include=[np.number]).columns.tolist()
 
-    st.markdown('**Correlation Heatmap**')
+    st.markdown("#### 🔥 Korrelationsmatrix")
     fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(df[cols].corr(), annot=True, fmt='.2f', cmap='coolwarm', ax=ax)
+    sns.heatmap(df[cols].corr(), annot=False, cmap='coolwarm', ax=ax)
     st.pyplot(fig)
 
-    st.markdown('**Histograms (select variable)**')
-    var = st.selectbox('Choose variable for histogram', cols, index=0)
-    fig2 = px.histogram(df, x=var, nbins=30, title=f'Histogram of {var}', marginal='box')
+    st.markdown("#### 📦 Histogrammer")
+    var = st.selectbox('Vælg variabel', cols)
+    fig2 = px.histogram(intervals_to_str(df), x=var, nbins=30, marginal="box")
     st.plotly_chart(fig2, use_container_width=True)
 
-    st.markdown('**Grouped Histograms: TenYearCHD**')
-    group_var = st.selectbox(
-        'Variable to group by TenYearCHD', cols, index=min(3, len(cols) - 1)
+    st.markdown("#### 🔄 Sammenligning med TenYearCHD")
+    group_var = st.selectbox('Vælg variabel at gruppere', cols)
+    df_plot = intervals_to_str(df)
+    fig3 = px.histogram(
+        df_plot,
+        x=group_var,
+        color='TenYearCHD',
+        barmode='overlay',
+        nbins=30
     )
-    fig3 = px.histogram(df, x=group_var, color='TenYearCHD', barmode='overlay', nbins=30)
     st.plotly_chart(fig3, use_container_width=True)
 
-# Model training / load
-if show_model:
-    st.subheader('Model: Random Forest (predict 10-year CHD)')
+# -------------------------
+# Tab 3: Model
+# -------------------------
+with tab3:
+    st.subheader("Random Forest: Predict 10-year CHD")
+    use_cache = st.checkbox("Brug gemt model, hvis tilgængelig", value=True)
+    model, scaler, loaded = train_or_load_model(df, use_cache=use_cache)
 
-    model, scaler, loaded = train_or_load_model(
-        df,
-        target='TenYearCHD',
-        cache_path='rf_heart.joblib' if use_saved_model else 'rf_heart_temp.joblib'
-    )
-    if loaded:
-        st.success('Loaded cached model')
-    else:
-        st.info('Trained a new model and cached it')
-
-    # Show metrics on holdout sample
+    
+    # Test metrics
     X = df.drop(columns=['TenYearCHD'])
     y = df['TenYearCHD']
     X_train, X_test, y_train, y_test = train_test_split(
@@ -135,116 +146,96 @@ if show_model:
     X_test_s = scaler.transform(X_test)
     y_proba = model.predict_proba(X_test_s)[:, 1]
     y_pred = model.predict(X_test_s)
-    st.write('ROC AUC (test):', roc_auc_score(y_test, y_proba))
-    st.write('Accuracy (test):', accuracy_score(y_test, y_pred))
-    st.text(classification_report(y_test, y_pred))
 
-    # Feature importance
-    try:
-        importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-        st.markdown('**Top features (importance)**')
-        st.bar_chart(importances.head(15))
-    except Exception:
-        st.write('Feature importance unavailable')
+    c1, c2 = st.columns(2)
+    c1.metric("ROC AUC", f"{roc_auc_score(y_test, y_proba):.3f}")
+    c2.metric("Accuracy", f"{accuracy_score(y_test, y_pred):.3f}")
 
-    # Interactive prediction
-    st.markdown('---')
-    st.markdown('### Predict individual risk')
+    with st.expander("Classification report"):
+        st.text(classification_report(y_test, y_pred))
+
+    st.markdown("#### 📌 Feature importance")
+    importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+    st.bar_chart(importances.head(15))
+
+    st.markdown("#### 👤 Individuel patient-prædiktion")
     input_row = {}
-    cols_for_input = X.columns.tolist()
-    with st.form('predict_form'):
-        st.write('Fill patient attributes (use realistic ranges)')
-        for c in cols_for_input:
-            val = st.number_input(c, value=float(df[c].median()))
-            input_row[c] = val
-        submitted = st.form_submit_button('Predict')
-        if submitted:
-            X_new = pd.DataFrame([input_row])
-            X_new_s = scaler.transform(X_new)
-            prob = model.predict_proba(X_new_s)[0, 1]
+    with st.form("predict_form"):
+        for c in X.columns:
+            input_row[c] = st.number_input(c, value=float(df[c].median()))
+        submitted = st.form_submit_button("Predict")
 
-            # Risiko-kategorisering
-            if prob < 0.2:
-                label = "Lav risiko"
-                note = "Sandsynlighed lav (<20%). Overvåg rutinemæssigt."
-                tone = "success"
-            elif prob < 0.5:
-                label = "Moderat risiko"
-                note = "Moderate risiko (20–50%). Overvej opfølgning og livsstilsintervention."
-                tone = "warning"
-            else:
-                label = "Høj risiko"
-                note = "Høj risiko (>50%). Overvej klinisk vurdering og videre undersøgelser."
-                tone = "error"
+    if submitted:
+        X_new = pd.DataFrame([input_row])
+        X_new_s = scaler.transform(X_new)
+        prob = model.predict_proba(X_new_s)[0, 1]
 
-            # Vis resultater
-            st.metric('Predicted 10-year CHD probability', f"{prob:.1%}")
-            if tone == "success":
-                st.success(f"{label} — {note}")
-            elif tone == "warning":
-                st.warning(f"{label} — {note}")
-            else:
-                st.error(f"{label} — {note}")
+        # Vis kun risikoen
+        if prob < 0.2:
+            st.success(f"🟢 Lav risiko ({prob:.1%})")
+        elif prob < 0.5:
+            st.warning(f"🟡 Moderat risiko ({prob:.1%})")
+        else:
+            st.error(f"🔴 Høj risiko ({prob:.1%})")
 
-            # SHAP explanation (hvis valgt)
-            if SHAP_AVAILABLE and show_shap:
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X_new_s)
-                st.write('SHAP explanation (force plot)')
-                try:
-                    shap_html = shap.force_plot(
-                        explainer.expected_value[1],
-                        shap_values[1],
-                        X_new,
-                        matplotlib=False
-                    )
-                    st.components.v1.html(shap_html.html(), height=400)
-                except Exception:
-                    st.write('Could not render SHAP force plot in this environment')
+        # SHAP forklaring, hvis tilgængelig
+        if SHAP_AVAILABLE:
+            st.markdown("#### SHAP forklaring")
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_new_s)
+            try:
+                shap_html = shap.force_plot(
+                    explainer.expected_value[1], shap_values[1], X_new, matplotlib=False
+                )
+                st.components.v1.html(shap_html.html(), height=400)
+            except Exception:
+                st.info("Kunne ikke vise SHAP plot i dette miljø")
 
-# Clustering visualization
-st.subheader('Clustering & PCA (2D)')
 
-numeric = df.select_dtypes(include=[np.number])
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(numeric.drop(columns=['TenYearCHD'], errors='ignore'))
+# -------------------------
+# Tab 4: Clustering
+# -------------------------
+with tab4:
+    st.subheader("KMeans clustering & PCA (2D)")
+    numeric = df.select_dtypes(include=[np.number])
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(numeric.drop(columns=['TenYearCHD'], errors="ignore"))
 
-pca = PCA(n_components=2)
-X_pca = pca.fit_transform(X_scaled)
-cluster_k = st.slider('Choose number of clusters (KMeans)', 2, 6, 3)
-from sklearn.cluster import KMeans
-km = KMeans(n_clusters=cluster_k, random_state=42)
-labels = km.fit_predict(X_scaled)
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_scaled)
 
-fig = px.scatter(
-    x=X_pca[:, 0],
-    y=X_pca[:, 1],
-    color=labels.astype(str),
-    hover_data=[df.index],
-    title='PCA 2D clustering'
-)
-st.plotly_chart(fig, use_container_width=True)
+    cluster_k = st.slider("Antal clusters (KMeans)", 2, 6, 3)
+    km = KMeans(n_clusters=cluster_k, random_state=42)
+    labels = km.fit_predict(X_scaled)
 
-# Binned analysis
-st.subheader('Binned analysis example')
-bin_col = st.selectbox('Column to bin', numeric.columns.tolist(), index=0)
-agg_col = st.selectbox('Column to aggregate', numeric.columns.tolist(), index=min(1, len(numeric.columns) - 1))
-nbins = st.slider('Number of bins', 3, 10, 5)
+    fig = px.scatter(x=X_pca[:, 0], y=X_pca[:, 1], color=labels.astype(str),
+                     title="PCA 2D clustering", hover_data=[df.index])
+    st.plotly_chart(fig, use_container_width=True)
 
-bins = pd.cut(df[bin_col], bins=nbins)
-agg = df.groupby(bins)[agg_col].mean().reset_index()
-fig = px.bar(agg, x=agg_col, y=agg_col, title=f'Mean {agg_col} per {bin_col} bin')
-st.plotly_chart(fig)
+# -------------------------
+# Tab 5: Binned analysis
+# -------------------------
+with tab5:
+    st.subheader("Binned analysis")
+    numeric = df.select_dtypes(include=[np.number])
+    bin_col = st.selectbox("Kolonne til binning", numeric.columns)
+    agg_col = st.selectbox("Kolonne til gennemsnit", numeric.columns)
+    nbins = st.slider("Antal bins", 3, 10, 5)
 
-# Footer: deployment & evaluation guidance
-st.markdown('---')
-st.header('Deployment & Usability')
-st.markdown(
-"""
-**Run locally:**
-- Install dependencies: `pip install -r requirements.txt` (see README)
-- `streamlit run streamlit_app_sprint4.py`
-"""
-)
+    df_bins = intervals_to_str(df.copy())
+    df_bins['bins'] = pd.cut(df_bins[bin_col], bins=nbins).astype(str)
+    agg = df_bins.groupby('bins', observed=True)[agg_col].mean().reset_index(name=f"mean_{agg_col}")
 
-st.write('End of app')
+    fig = px.bar(
+        agg,
+        x='bins',
+        y=f"mean_{agg_col}",
+        title=f"Gennemsnit af {agg_col} pr. {bin_col}-interval"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# -------------------------
+# Footer
+# -------------------------
+st.markdown("---")
+st.info("Kør appen lokalt med: `streamlit run streamlit_app_sprint4_userfriendly_fixed.py`")
