@@ -108,8 +108,9 @@ with tab2:
 
     st.markdown("#### 🔥 Korrelationsmatrix")
     fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(df[cols].corr(), annot=False, cmap='coolwarm', ax=ax)
+    sns.heatmap(df[cols].corr(), annot=True, fmt=".2f", cmap='coolwarm', ax=ax)
     st.pyplot(fig)
+
 
     st.markdown("#### 📦 Histogrammer")
     var = st.selectbox('Vælg variabel', cols)
