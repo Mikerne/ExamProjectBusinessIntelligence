@@ -88,9 +88,10 @@ Raw data is cleaned, processed, and transformed into a structured dataset suitab
 
 **Structure:**  
 - `data/` – raw and processed datasets  
-- `notebooks/` – experiments and analysis  
-- `app_*.py` – Streamlit applications  
-- `reports/` – documentation and reports  
+- `notebooks/` – experiments, report and analysis  
+- `app_*.py` – Streamlit applications
+- `src/` – Helpers and data import
+
 
 **Software Requirements:**  
 - Python 3.9+  
