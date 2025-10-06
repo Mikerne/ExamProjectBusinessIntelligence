@@ -3,7 +3,7 @@
 ## Project Description
 This project applies AI methods and machine learning algorithms for predictive analytics on a heart disease dataset. The goal is to extend exploratory data analysis with predictive modelling, train models, and evaluate their performance for predicting "TenYearCHD".
 
-This Sprint foucses on:
+This Sprint focuses on:
 1. Selecting relevant machine learning methods (supervised learning).
 2. Training and evaluating models on both training and test data.
 3. Applying inference metrics to assess model quality.
