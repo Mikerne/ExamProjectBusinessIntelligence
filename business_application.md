@@ -4,22 +4,21 @@
 
 The **Heart Disease Explorer** is an interactive web application designed to make heart disease data analysis accessible to non-technical users. The application allows exploration, visualization, predictive modeling, and scenario testing using a **tuned Random Forest** model.
 
-**Goals for Sprint 4:**
+**Goals for Business Application:**
 1. Create a web application with a simple visual interface.
 2. Apply visual representations of data, analyses, and model results.
 3. Provide explanation and interpretation of results for business users.
-4. Collect usability feedback and improve the prototype.
 
 ---
 
 ## Features of the App
 
-### 1. Data Exploration (Tab: 📊 Data)
+### 1. Data Exploration (Tab: Data)
 - Display dataset sample (up to 500 rows) with summary statistics.
 - Show number of rows and columns.
 - Provide statistical overview using `df.describe()`.
 
-### 2. Exploratory Data Analysis (Tab: 🔎 EDA)
+### 2. Exploratory Data Analysis (Tab: EDA)
 - Correlation heatmap for numeric features.
 - Interactive histograms for selected variables using Plotly.
 - Enables users to observe distribution and relationships.
@@ -31,7 +30,7 @@ The **Heart Disease Explorer** is an interactive web application designed to mak
   - Higher threshold → higher precision, fewer false positives.
 - Display **test set metrics**:
   - ROC AUC, Accuracy, Precision, Recall, F1-score
-- Feature importance visualization (top 15 features).
+- Feature importance visualization 
 - Individual patient prediction form:
   - Users input patient features.
   - Receive personalized risk prediction (low, moderate, high risk).
@@ -58,11 +57,3 @@ The **Heart Disease Explorer** is an interactive web application designed to mak
   - `n_estimators=300, max_depth=5, min_samples_split=5, min_samples_leaf=2, class_weight='balanced'`
 - **Caching**: Streamlit caching for data and model to improve performance.
 - **SHAP**: Optional for model interpretability (explains feature contributions).
-
----
-
-## How to Run the App
-
-1. Install required packages:
-```bash
-pip install -r requirements.txt
